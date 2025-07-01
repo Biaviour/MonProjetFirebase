@@ -4,18 +4,20 @@ const fetch = require("node-fetch");
 
 admin.initializeApp();
 
+const elevenLabsKey = functions.config().elevenlabs.key;
+
 exports.generateAudio = functions.https.onRequest(async (req, res) => {
   try {
     const {text, voiceId} = req.body;
 
     // Appel à l'API ElevenLabs
     const response = await fetch(
-        `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
+        `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`,
+        {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            "xi-api-key":
-    "sk_930d0efccb949bf918d373e6384b0a1e1b7d2029cfb77c19",
+            "xi-api-key": elevenLabsKey,
           },
           body: JSON.stringify({
             text: text,
@@ -24,7 +26,7 @@ exports.generateAudio = functions.https.onRequest(async (req, res) => {
               stability: 0.5,
               similarity_boost: 0.75,
             },
-            response_format: "base64", // Pour obtenir l'audio en base64
+            response_format: "base64",
           }),
         },
     );
