@@ -5,37 +5,36 @@ const fetch = require("node-fetch");
 
 admin.initializeApp();
 
-// Ajout explicite du projectId ici
+// Initialisation du client Secret Manager
 const client = new SecretManagerServiceClient({
   projectId: 'b-iaviourauth',
 });
 
 async function getElevenLabsKey() {
   const secretName = `projects/b-iaviourauth/secrets/ELEVENLABS_KEY/versions/latest`;
-  console.log("Accès au secret avec le chemin :", secretName); // Log debug
-  const [version] = await client.accessSecretVersion({
-    name: secretName,
-  });
+  console.log("Accès au secret avec le chemin :", secretName);
+  const [version] = await client.accessSecretVersion({ name: secretName });
   const payload = version.payload.data.toString();
-  console.log("Clé récupérée de Secret Manager :", payload); // Log debug
+  console.log("Clé récupérée de Secret Manager :", payload.slice(0, 5) + '... (coupée)');
   return payload;
 }
 
 exports.generateAudio = onRequest(async (req, res) => {
-  // Gestion CORS
+  // CORS
   res.set("Access-Control-Allow-Origin", "*");
   res.set("Access-Control-Allow-Headers", "Content-Type");
 
-  // Requête OPTIONS pré-vol
   if (req.method === "OPTIONS") {
     return res.status(204).send("");
   }
 
   try {
-    // Récupération sécurisée de la clé API
     const elevenLabsKey = await getElevenLabsKey();
-
     const { text, voiceId } = req.body;
+
+    if (!text || !voiceId) {
+      return res.status(400).send("Champs 'text' et 'voiceId' requis.");
+    }
 
     const response = await fetch(
       `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`,
@@ -52,31 +51,36 @@ exports.generateAudio = onRequest(async (req, res) => {
             stability: 0.5,
             similarity_boost: 0.75,
           },
-          response_format: "base64",
+          response_format: "mp3"
         }),
       }
     );
 
-    const data = await response.json();
+    console.log("Statut ElevenLabs:", response.status);
 
-    if (!data || !data.audio) {
-      return res.status(500).send("Erreur : pas de données audio reçues.");
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("Erreur ElevenLabs:", errorText);
+      return res.status(500).send("Erreur API ElevenLabs");
     }
 
-    const audioBuffer = Buffer.from(data.audio, "base64");
+    const audioBuffer = await response.arrayBuffer();
+    console.log("Taille buffer audio :", audioBuffer.byteLength);
+
     const fileName = `audios/audio-${Date.now()}.mp3`;
     const bucket = admin.storage().bucket();
     const file = bucket.file(fileName);
 
-    await file.save(audioBuffer, {
+    await file.save(Buffer.from(audioBuffer), {
       metadata: { contentType: "audio/mpeg" },
       public: true,
     });
 
     const publicUrl = `https://storage.googleapis.com/${bucket.name}/${fileName}`;
+    console.log("Fichier audio disponible à :", publicUrl);
     res.status(200).json({ audioUrl: publicUrl });
   } catch (error) {
-    console.error(error);
+    console.error("Erreur globale :", error);
     res.status(500).send("Erreur lors de la génération audio");
   }
 });
