@@ -5,7 +5,10 @@ const fetch = require("node-fetch");
 
 admin.initializeApp();
 
-const client = new SecretManagerServiceClient();
+// Ajout explicite du projectId ici
+const client = new SecretManagerServiceClient({
+  projectId: 'b-iaviourauth',
+});
 
 async function getElevenLabsKey() {
   const secretName = `projects/b-iaviourauth/secrets/ELEVENLABS_KEY/versions/latest`;
