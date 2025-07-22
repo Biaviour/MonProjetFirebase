@@ -84,3 +84,46 @@ exports.generateAudio = onRequest(async (req, res) => {
     res.status(500).send("Erreur lors de la génération audio");
   }
 });
+
+exports.uploadAudioFromFlutterFlow = onRequest(async (req, res) => {
+  res.set("Access-Control-Allow-Origin", "*");
+  res.set("Access-Control-Allow-Headers", "Content-Type");
+
+  if (req.method === "OPTIONS") {
+    return res.status(204).send("");
+  }
+
+  try {
+    const { audio_base64 } = req.body;
+
+    if (!audio_base64 || !audio_base64.startsWith("data:audio")) {
+      return res.status(400).send("Champ 'audio_base64' manquant ou invalide.");
+    }
+
+    const matches = audio_base64.match(/^data:(audio\/\w+);base64,(.+)$/);
+    if (!matches) {
+      return res.status(400).send("Format base64 audio invalide.");
+    }
+
+    const contentType = matches[1];
+    const base64Data = matches[2];
+    const buffer = Buffer.from(base64Data, "base64");
+
+    const fileName = `uploads/audio-${Date.now()}.mp3`;
+    const bucket = admin.storage().bucket();
+    const file = bucket.file(fileName);
+
+    await file.save(buffer, {
+      metadata: { contentType },
+      public: true,
+    });
+
+    const publicUrl = `https://storage.googleapis.com/${bucket.name}/${fileName}`;
+    console.log("URL audio générée :", publicUrl);
+
+    res.status(200).json({ audioUrl: publicUrl });
+  } catch (error) {
+    console.error("Erreur upload audio :", error);
+    res.status(500).send("Erreur lors de l'upload audio");
+  }
+});
